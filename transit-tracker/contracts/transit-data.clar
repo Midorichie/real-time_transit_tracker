@@ -7,6 +7,17 @@
 (define-constant err-owner-only (err u100))
 (define-constant err-not-found (err u101))
 (define-constant err-invalid-data (err u102))
+(define-constant err-invalid-coordinates (err u103))
+(define-constant err-unauthorized (err u104))
+
+;; Access control map for managing authorized data providers
+(define-map authorized-providers 
+  { provider: principal } 
+  { active: bool }
+)
+
+;; Print events for important actions (security audit trail)
+(define-data-var enable-event-logging bool true)
 
 ;; Data variables
 (define-data-var last-update uint u0)  ;; Timestamp of last data update
@@ -60,7 +71,18 @@
   (var-get last-update)
 )
 
-;; Public functions - restricted to contract owner
+(define-read-only (is-authorized-provider (provider principal))
+  (default-to false (get active (map-get? authorized-providers { provider: provider })))
+)
+
+;; Helper function to log events when enabled
+(define-private (log-event (event-type (string-ascii 20)) (entity-id (string-ascii 20)))
+  (if (var-get enable-event-logging)
+      (print { event-type: event-type, entity-id: entity-id, block: block-height, sender: tx-sender })
+      (print { event-type: "logging-disabled", entity-id: entity-id, block: block-height, sender: tx-sender }))  ;; Both branches now return the same type
+)
+
+;; Public functions with access control
 
 (define-public (add-stop 
   (stop-id (string-ascii 20)) 
@@ -69,7 +91,13 @@
   (longitude int))
   
   (begin
-    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    ;; Allow contract owner or authorized providers
+    (asserts! (or (is-eq tx-sender contract-owner) (is-authorized-provider tx-sender)) err-unauthorized)
+    
+    ;; Validate coordinates
+    (asserts! (and (>= latitude (* -90 1000000)) (<= latitude (* 90 1000000))) err-invalid-coordinates)
+    (asserts! (and (>= longitude (* -180 1000000)) (<= longitude (* 180 1000000))) err-invalid-coordinates)
+    
     (map-set transit-stops
       { stop-id: stop-id }
       {
@@ -79,6 +107,10 @@
         active: true
       }
     )
+    
+    ;; Log the event
+    (log-event "add-stop" stop-id)
+    
     (ok true)
   )
 )
@@ -91,7 +123,16 @@
   (status (string-ascii 20)))
   
   (begin
-    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    ;; Allow contract owner or authorized providers
+    (asserts! (or (is-eq tx-sender contract-owner) (is-authorized-provider tx-sender)) err-unauthorized)
+    
+    ;; Validate coordinates
+    (asserts! (and (>= latitude (* -90 1000000)) (<= latitude (* 90 1000000))) err-invalid-coordinates)
+    (asserts! (and (>= longitude (* -180 1000000)) (<= longitude (* 180 1000000))) err-invalid-coordinates)
+    
+    ;; Validate route exists
+    (asserts! (is-some (get-route route-id)) err-not-found)
+    
     (map-set transit-vehicles
       { vehicle-id: vehicle-id }
       {
@@ -102,6 +143,10 @@
         status: status
       }
     )
+    
+    ;; Log the event
+    (log-event "add-vehicle" vehicle-id)
+    
     (ok true)
   )
 )
@@ -112,7 +157,13 @@
   (stops (list 20 (string-ascii 20))))
   
   (begin
-    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    ;; Allow contract owner or authorized providers
+    (asserts! (or (is-eq tx-sender contract-owner) (is-authorized-provider tx-sender)) err-unauthorized)
+    
+    ;; Validate that all stops exist
+    ;; This is a simplified check - in production would need to validate each stop
+    (asserts! (> (len stops) u0) err-invalid-data)
+    
     (map-set transit-routes
       { route-id: route-id }
       {
@@ -121,6 +172,10 @@
         active: true
       }
     )
+    
+    ;; Log the event
+    (log-event "add-route" route-id)
+    
     (ok true)
   )
 )
@@ -133,6 +188,10 @@
   (let ((vehicle (unwrap! (get-vehicle vehicle-id) err-not-found)))
     (begin
       (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+      ;; Validate coordinates
+      (asserts! (and (>= latitude (* -90 1000000)) (<= latitude (* 90 1000000))) err-invalid-coordinates)
+      (asserts! (and (>= longitude (* -180 1000000)) (<= longitude (* 180 1000000))) err-invalid-coordinates)
+      
       (map-set transit-vehicles
         { vehicle-id: vehicle-id }
         (merge vehicle {
@@ -174,7 +233,36 @@
         { route-id: route-id }
         (merge route { active: active })
       )
+      
+      ;; Log the event
+      (log-event "route-status" route-id)
+      
       (ok true)
     )
+  )
+)
+
+;; Provider management functions - only for contract owner
+
+(define-public (set-provider-status (provider principal) (active bool))
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (map-set authorized-providers
+      { provider: provider }
+      { active: active }
+    )
+    
+    ;; Log the event
+    (print { event-type: "set-provider", provider: provider, active: active })
+    
+    (ok true)
+  )
+)
+
+(define-public (toggle-event-logging (enabled bool))
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (var-set enable-event-logging enabled)
+    (ok true)
   )
 )

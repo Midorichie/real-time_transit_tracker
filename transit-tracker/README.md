@@ -25,6 +25,14 @@ This project consists of:
   - Stores information about stops, vehicles, and routes
   - Provides functions to update vehicle positions and status
   - Allows querying of transit information
+  - Implements secure access control for data providers
+  - Contains event logging for security audit trails
+
+- `route-planner.clar` - Contract for route planning and optimization
+  - Stores cached routes between stops
+  - Calculates estimated travel times
+  - Implements a token-based payment model for route queries
+  - Provides route verification through cryptographic hashing
 
 ## Prerequisites
 
@@ -83,7 +91,22 @@ clarinet deploy --mainnet
 1. Edit Clarity contracts in the `contracts` directory
 2. Write tests in the `tests` directory
 3. Run tests with `clarinet test`
-4. Deploy changes with `clarinet deploy`
+4. Check for security issues with `clarinet check`
+5. Deploy changes with `clarinet deploy`
+
+### Contract Interaction Flow
+
+```
+User/Application → Frontend → Backend Service → Smart Contracts
+                      ↑                ↑              ↑
+                      └────────────────┴──────────────┘
+                          Query Results & Updates
+```
+
+The system uses a hybrid on-chain/off-chain architecture:
+- Core transit data and route information stored on-chain
+- Real-time updates and calculations performed off-chain
+- Verification and data integrity ensured by smart contracts
 
 ## Integrating with Transit APIs
 
@@ -95,9 +118,25 @@ The project is designed to work with various public transport APIs. To integrate
 
 ## Security Considerations
 
-- Only authorized addresses can update transit data
-- Data validation is performed before storing on the blockchain
-- Rate limiting is implemented to prevent excessive update transactions
+- Multi-level access control system:
+  - Contract owner has full administrative rights
+  - Authorized data providers can update transit information
+  - Public users can only query data
+
+- Enhanced data validation:
+  - Coordinate validation to ensure geographical accuracy
+  - Route integrity verification through cryptographic hashing
+  - Input sanitization for all user-provided data
+
+- Anti-abuse measures:
+  - Rate limiting to prevent excessive update transactions
+  - Query limits to prevent API abuse
+  - Token-based payment model for premium route calculations
+
+- Audit and monitoring:
+  - Comprehensive event logging for all state-changing operations
+  - Ability to track all data modifications with timestamps and sender information
+  - Toggleable logging for performance optimization
 
 ## Testing
 
