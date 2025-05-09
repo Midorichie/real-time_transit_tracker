@@ -1,0 +1,35 @@
+[project]
+name = "transit-tracker"
+description = "Real-time transit tracking system on Stacks blockchain"
+authors = ["Hammed <hamsohood@gmail.com>"]
+telemetry = false
+requirements = []
+boot_contracts = ["pox", "costs-v2", "bns"]
+
+[contracts.transit-data]
+path = "contracts/transit-data.clar"
+depends_on = []
+
+[repl.analysis]
+passes = ["check_checker"]
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false
+
+# For deployment to testnet/mainnet
+[network]
+name = "testnet"
+
+[network.devnet]
+node_rpc_address = "http://localhost:20443"
+
+[network.testnet]
+node_rpc_address = "https://stacks-node-api.testnet.stacks.co"
+deployment_fee_rate = 10
+
+[network.mainnet]
+node_rpc_address = "https://stacks-node-api.mainnet.stacks.co"
+deployment_fee_rate = 10
